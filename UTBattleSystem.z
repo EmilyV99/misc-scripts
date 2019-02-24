@@ -1,0 +1,351 @@
+//Undertale-style battle system script
+//Ver 0.1
+//Reqs: ffscript.zh, std.zh
+typedef const int DEFINE;
+typedef const int CONFIG;
+
+CONFIG DEBUG = 1;
+
+global script active
+{
+	REBitmapInit();
+	while(1)
+	{
+		Waitframe();
+	}
+}
+
+dmapdata script randomEncounters
+{
+	int SafeCombos[] = {12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22};
+	CONFIG SAFE_CENTERED = 1; //Set to 1, the combo at Link's center must be safe. Set to 0, any combo under Link can be safe.
+	CONFIG BG_BITMAP = 1; //Built-in bitmap to render the main background to
+	CONFIG FG_BITMAP = 2; //Built-in bitmap to render FG objects to, for inscreased speed
+	//D0: Encounter ID
+	//D1: Percentage rate of encounter per encounter check
+	//D2: Number of movement frames per encounter check
+	void run(int encounterID, int encounterRate, int encounterFrames)
+	{
+		encounterID = 0;
+		encounterRate = 10;
+		encounterFrames = 120;
+		if(DEBUG) printf("[RandomEncounters] Starting with rate %d, frames %d, ID %d\n", encounterRate, encounterFrames, encounterID);
+		encounterRate = VBound(encounterRate, 100, 0); //Encounter rate is percentage, limit 0-100
+		encounterFrames = Max(encounterFrames, 1); //encounterFrames must be at least 1
+		int frame = 0;
+		int lastX = Link->X;
+		int lastY = Link->Y;
+		bool isSafe = false;
+		int lastRolled = -1;
+		while(1)
+		{
+			if(DEBUG)
+			{
+				debugDraw("Safe:  ", Untype(isSafe), 0, true);
+				debugDraw("Frame:    ", frame, 1, true);
+				debugDraw("Last Rolled:   ", lastRolled, 2, true);
+				debugDraw("ID: ", encounterID, 0, false);
+				debugDraw("Rate: ", encounterRate, 1, false);
+				debugDraw("Frames: ", encounterFrames, 2, false);
+			}
+			if(Link->X != lastX || Link->Y != lastY)
+			{
+				isSafe = false;
+				for(int j = SizeOfArray(SafeCombos) - 1; j >= 0; --j)
+				{
+					int safe = SafeCombos[j];
+					if(SAFE_CENTERED ? Screen->ComboD[ComboAt(Link->X + 8, Link->Y + 8)] == safe : ((Screen->ComboD[ComboAt(Link->X, Link->Y)] == safe) || (Screen->ComboD[ComboAt(Link->X + 15, Link->Y)]      == safe) || (Screen->ComboD[ComboAt(Link->X, Link->Y + 15)] == safe) || (Screen->ComboD[ComboAt(Link->X + 15, Link->Y + 15)] == safe)))
+					{
+						isSafe = true;
+						break;
+					}
+				}
+				if(!isSafe)
+				{
+					++frame;
+					frame %= encounterFrames;
+					if(!frame)
+					{
+						lastRolled = Rand(100);
+						if(lastRolled < encounterRate)
+						{
+							encounter(encounterID);
+						}
+					}
+				}
+				lastX = Link->X;
+				lastY = Link->Y;
+			}
+			Waitframe();
+		}
+	}
+	
+	DEFINE ENM_TUTORIAL = 1;
+	DEFINE ENM_FRISK = 2;
+	
+	void encounter(int encounterID)
+	{
+		int enemy = 0;
+		switch(encounterID)
+		{
+			case 0:
+			{
+				int rng = Rand(100);
+				enemy = rng < 75 ? ENM_TUTORIAL : ENM_FRISK; //75% chance to encounter TUTORIAL, 25% to encounter FRISK.
+				break;
+			}
+			
+			case 1:
+			{
+				enemy = ENM_FRISK; //100% chance to encounter FRISK
+				break;
+			}
+			
+			default:
+			{
+				if(DEBUG) TraceS("Undefined encounterID!");
+				return;
+			}
+		}
+		if(DEBUG) printf("Encountering enemy %d!\n", enemy);
+		Screen_Freeze(1);
+		drawBattleOpening();
+		ffc layerdrawer = Screen->LoadFFC(RunFFCScript(Game->GetFFCScript("drawToLayer"), (int[8]){drawToLayer.TYPE_LW, 7})); //Draw LWeapons above other draws. When `Link->HitWidth/HitHeight` exist, this can be completely redone with EWeapons.
+		
+		int oldx = Link->X;
+		int oldy = Link->Y;
+		int oldz = Link->Z;
+		Link->X = 16;
+		Link->Y = 16;
+		Link->Z = 0;
+		//Reset his coordinates to this each frame, moving the heart enemy the difference in coords.
+		int arCursor = 0;
+		while(1) //Battle while
+		{
+			//Run FFC script for ShowStringAndWait, to display opening message. This should load string based on enemy.
+			while(1) //Act/Run Menu while
+			{
+				DrawAR(arCursor);
+				DrawEnemy(enemy);
+				if(Link->PressLeft || Link->PressRight)
+				{
+					++arCursor;
+					arCursor %= 2;
+				}
+				if(Link->PressA)
+				{
+					if(arCursor)
+					{
+						//Run
+					}
+					else
+					{
+						//Act
+						bool quit = false;
+						Waitframe();
+						while(1)
+						{
+							if(Link->PressB)
+							{
+								quit = true;
+								break;
+							}
+							DrawEnemy(enemy);
+							//Do act menu here! Should be Tango menu!
+							Waitframe();
+						}
+						if(quit)
+						{
+							Waitframe();
+							continue;
+						}
+						break;
+					}
+				}
+			}
+			
+		}
+		//End battle
+		layerdrawer->Script = 0;
+		layerdrawer->Data = 0;
+		Link->X = oldx;
+		Link->Y = oldy;
+		Link->Z = oldz;
+	}
+}
+
+DEFINE COMBO_FRZ1 = 38400;
+DEFINE COMBO_FRZ2 = 38401;
+bool isFrozen = false;
+
+void Screen_Freeze(int freeze) //start
+{
+	ffc f1 = Screen->LoadFFC(31);
+	ffc f2 = Screen->LoadFFC(32);
+	if(freeze==2)
+	{
+		f1->Data = COMBO_FRZ1;
+		f2->Data = COMBO_FRZ2;
+		isFrozen=true;
+	}
+	else if(freeze==1)
+	{
+		f1->Data = COMBO_FRZ1;
+		f2->Data = 0;
+		isFrozen=true;
+	}
+	else
+	{
+		f1->Data = 0;
+		f2->Data = 0;
+		isFrozen=false;
+	}
+}//end
+
+ffc script drawToLayer //start
+{
+	//Will draw all of a type of thing to a given layer. Does not handle TileWidth/TileHeight at this time!
+	DEFINE TYPE_LW = 0;
+	DEFINE TYPE_EW = 1;
+	DEFINE TYPE_ITEM = 2;
+	DEFINE TYPE_NPC = 3;
+	DEFINE TYPE_FFC = 4;
+	DEFINE TYPE_LINK = 5;
+	void run(int type, int layer)
+	{
+		while(1)
+		{
+			int max;
+			switch(type)
+			{
+				case TYPE_LW:
+					max = Screen->NumLWeapons();
+					break;
+				case TYPE_EW:
+					max = Screen->NumEWeapons();
+					break;
+				case TYPE_ITEM:
+					max = Screen->NumItems();
+					break;
+				case TYPE_NPC:
+					max = Screen->NumNPCs();
+					break;
+				case TYPE_FFC:
+					max = MAX_FFC;
+					break;
+				case TYPE_LINK:
+					max = 1;
+					break;
+				default:
+					max = 0;
+			}
+			for(int j = 0; j < max; ++j)
+			{
+				int tile = 0, combo = 0, cset = 0, x = 0, y = 0;
+				bool skip = false;
+				switch(type)
+				{
+					case TYPE_LW:
+						lweapon obj = Screen->LoadLWeapon(j);
+						tile = obj->Tile;
+						cset = obj->CSet;
+						x = obj->X;
+						y = obj->Y;
+						break;
+					case TYPE_EW:
+						eweapon obj = Screen->LoadEWeapon(j);
+						tile = obj->Tile;
+						cset = obj->CSet;
+						x = obj->X;
+						y = obj->Y;
+						break;
+					case TYPE_ITEM:
+						item obj = Screen->LoadItem(j);
+						tile = obj->Tile;
+						cset = obj->CSet;
+						x = obj->X;
+						y = obj->Y;
+						break;
+					case TYPE_NPC:
+						npc obj = Screen->LoadNPC(j);
+						tile = obj->Tile;
+						cset = obj->CSet;
+						skip = obj->InvFrames % 2;
+						x = obj->X;
+						y = obj->Y;
+						break;
+					case TYPE_FFC:
+						ffc obj = Screen->LoadFFC(j);
+						combo = obj->Data;
+						cset = obj->CSet;
+						x = obj->X;
+						y = obj->Y;
+						break;
+					case TYPE_LINK:
+						tile =  Link->Invisible ? 0 : (Link->ScriptTile ? Link->ScriptTile : Link->Tile);
+						cset = 6;
+						skip = Link->InvFrames % 2;
+						x = Link->X;
+						y = Link->Y;
+						break;
+				}
+				if(tile)
+					Screen->FastTile(layer, x, y, tile, cset, OP_OPAQUE);
+				else if(combo)
+					Screen->FastCombo(layer, x, y, combo, cset, OP_OPAQUE);
+			}
+			Waitframe();
+		}
+	}
+}//end
+
+void debugDraw(int label, int num, int index, bool right) //start
+{
+	if(right)
+	{
+		Screen->DrawString(7,256,index*6,FONT_Z3SMALL,0x01,0x00,TF_RIGHT,label,OP_OPAQUE);
+		int buf[16];
+		itoa(buf, num);
+		Screen->DrawString(7,256 ,index*6,FONT_Z3SMALL,0x01,0x00,TF_RIGHT,buf,OP_OPAQUE);
+	}
+	else
+	{
+		int buf[1024];
+		strcat(buf, label);
+		itoa(buf, strlen(buf), num);
+		Screen->DrawString(7,0,index*6,FONT_Z3SMALL,0x01,0x00,TF_NORMAL,buf,OP_OPAQUE);
+	}
+}//end
+
+void drawBattleOpening() //Put code here for a transition effect, including the full draws and timing. It will be played automatically at the correct time. start
+{
+	
+}//end
+
+void REBitmapInit() //start
+{
+	//Draw menu gfx to specified bitmaps BG_BITMAP and FG_BITMAP, so that they can be re-used below!
+}//end
+
+void DrawEnemy(int enemy) //start
+{
+	switch(enemy)
+	{
+		case ENM_TUTORIAL:
+		{
+			//Draw the Tutorial enemy to the screen
+			break;
+		}
+		
+		case ENM_FRISK:
+		{
+			//Draw the Frisk enemy to the screen
+			break;
+		}
+	}
+}//end
+
+void DrawAR(int cursor)//start
+{
+	//Draw the Act/Run menu from the FG_BITMAP, as initialized by REBitmapInit() above.
+}//end
