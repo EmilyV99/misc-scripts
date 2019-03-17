@@ -3,32 +3,122 @@
 //Reqs: ffscript.zh, std.zh
 typedef const int DEFINE;
 typedef const int CONFIG;
+script typedef ffc n_enum;
 
-CONFIG DEBUG = 1;
+//start Custom Constants
+//These are here for the example enemies. They can be removed along with the example enemies before creating your own.
+DEFINE DATA_RAN = 0;
+DEFINE DATA_MSG = 1;
+DEFINE DATA_TEMPMSG = 2;
+DEFINE DATA_LASTACT = 3;
+DEFINE DATA_TEMP = 4;
+DEFINE DATA_ATTACK = 5;
+DEFINE DATA_DIFFICULTY = 6;
+DEFINE DATA_SPARABLE = 7;
+//end
+
+CONFIG DEBUG = 0; //0 = no Debug, 1 = Debug, 2 = Advanced Debug
+CONFIG USE_SUBSCREEN_SPACE = 1; //0 = don't use subscreen space, 1 = use subscreen space
+//start Attack Box
+CONFIG TRUE_CENTER_ATK_BOX = 1; //1 = Center attack box vertically by visible screen height, 0 = Center attack box between the text box and act bar
+CONFIG ATTACK_BOX_BORDER_WIDTH = 2; //In pixels
+CONFIG SHOW_ENEMY_DURING_ATTACK = 1;//0 = Enemy does not show during attack, 1 = Enemy shows during attack. If 1, attack box may be drawn over enemy!
+CONFIG ATTACK_BOX_DEFAULT_WIDTH = 64;
+CONFIG ATTACK_BOX_DEFAULT_HEIGHT = 64;
+//end
+//start Act/Run
+CONFIG ULTILE_ACT = 52120;
+CONFIG ULTILE_RUN = 52124;
+CONFIG AR_WIDTH = 64;
+CONFIG AR_HEIGHT = 24;
+CONFIG AR_SPACING = 32;
+CONFIG AR_CSET_DESEL = 1;
+CONFIG AR_CSET_SEL = 0;
+//end
+CONFIG USE_WALKING = 0; //1 = You just walk to dodge attacks, 0 = You have a hit marker (TILE_HEART) instead
+//TODO USE_WALKING == 1 is not set up! Leave it at 0 for now!
+//start Hit Marker (Only if USE_WALKING == 0!)
+CONFIG TILE_HEART = 124; //Tile for hit marker
+CONFIG MARKER_WIDTH = 7;
+CONFIG MARKER_HEIGHT = 7;
+//end
+//start Tiles/Combos/CSets
+CONFIG COMBO_BG = 55;
+CONFIG CSET_BG = 5;
+CONFIG TILE_INVIS = 80; //An invisible tile
+CONFIG COLOR_WHITE = 0x01;
+CONFIG COLOR_BLACK = 0x0F;
+//end
+//start Text Boxes
+CONFIG TILE_TANGO_BACKDROP = 52008;
+CONFIG TANGO_BACKDROP_WIDTH = 12;
+CONFIG TANGO_BACKDROP_HEIGHT = 3;
+CONFIG CSET_TANGO_BACKDROP = 0;
+CONFIG TANGO_MENU_CURSOR_COMBO = 75;
+CONFIG TANGO_MENU_CURSOR_CSET = 0;
+CONFIG TEXT_COLOR = COLOR_WHITE;
+//end
+//start DEFINEs
+DEFINE Y_BOTTOM = 128;
+DEFINE X_CENTER = 128;
+DEFINE MAX_TIMER = MAX_INT;
+DEFINE TANGO_DISPLAY_HEIGHT = 25 - (USE_SUBSCREEN_SPACE ? 56 : 0);
+DEFINE Y_TOP = (TANGO_BACKDROP_HEIGHT * 16) + TANGO_DISPLAY_HEIGHT;
+DEFINE Y_CENTER = (Y_BOTTOM + Y_TOP) / 2;
+DEFINE Y_TRUECENTER = USE_SUBSCREEN_SPACE ? 60 : 88;
+DEFINE HITWIDTH = USE_WALKING ? 16 : MARKER_WIDTH;
+//end
+
+
+int globalTimer = 0;
+
+//start back-end vars
+int __attackBoxWidth = 0;
+int __attackBoxHeight = 0;
+int __atkMinX = 0;
+int __atkMinY = 0;
+int __atkMaxX = 0;
+int __atkMaxY = 0;
+int __atkOffX = 0;
+int __atkOffY = 0;
+//end
+
 
 global script active
 {
-	REBitmapInit();
-	while(1)
+	void run()
 	{
-		Waitframe();
+		TangoInit();
+		randomEncounters.REBitmapInit();
+		while(1)
+		{
+			++globalTimer;
+			globalTimer %= MAX_TIMER;
+			Tango_Update1();
+            Waitdraw();
+            Tango_Update2();
+			Waitframe();
+		}
 	}
 }
 
-dmapdata script randomEncounters
+n_enum script ENM //start
+{
+	void run(){} //Null
+	DEFINE TUTORIAL = 1;
+	DEFINE FRISK = 2;
+}//end
+
+dmapdata script randomEncounters //start
 {
 	int SafeCombos[] = {12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22};
 	CONFIG SAFE_CENTERED = 1; //Set to 1, the combo at Link's center must be safe. Set to 0, any combo under Link can be safe.
-	CONFIG BG_BITMAP = 1; //Built-in bitmap to render the main background to
-	CONFIG FG_BITMAP = 2; //Built-in bitmap to render FG objects to, for inscreased speed
+	CONFIG FG_BITMAP = 1; //Built-in bitmap to render FG objects to, for inscreased speed
 	//D0: Encounter ID
 	//D1: Percentage rate of encounter per encounter check
 	//D2: Number of movement frames per encounter check
 	void run(int encounterID, int encounterRate, int encounterFrames)
 	{
-		encounterID = 0;
-		encounterRate = 10;
-		encounterFrames = 120;
 		if(DEBUG) printf("[RandomEncounters] Starting with rate %d, frames %d, ID %d\n", encounterRate, encounterFrames, encounterID);
 		encounterRate = VBound(encounterRate, 100, 0); //Encounter rate is percentage, limit 0-100
 		encounterFrames = Max(encounterFrames, 1); //encounterFrames must be at least 1
@@ -80,24 +170,24 @@ dmapdata script randomEncounters
 		}
 	}
 	
-	DEFINE ENM_TUTORIAL = 1;
-	DEFINE ENM_FRISK = 2;
-	
-	void encounter(int encounterID)
+	void encounter(int encounterID) //start
 	{
+		UpdateAttackBoxSize(); //Restore default attack box size
+		ResetAttackBox(); //Reset attack box offsets
 		int enemy = 0;
+		untyped data[256];
 		switch(encounterID)
 		{
 			case 0:
 			{
 				int rng = Rand(100);
-				enemy = rng < 75 ? ENM_TUTORIAL : ENM_FRISK; //75% chance to encounter TUTORIAL, 25% to encounter FRISK.
+				enemy = rng < 75 ? ENM.TUTORIAL : ENM.FRISK; //75% chance to encounter TUTORIAL, 25% to encounter FRISK.
 				break;
 			}
 			
 			case 1:
 			{
-				enemy = ENM_FRISK; //100% chance to encounter FRISK
+				enemy = ENM.FRISK; //100% chance to encounter FRISK
 				break;
 			}
 			
@@ -109,8 +199,9 @@ dmapdata script randomEncounters
 		}
 		if(DEBUG) printf("Encountering enemy %d!\n", enemy);
 		Screen_Freeze(1);
-		drawBattleOpening();
-		ffc layerdrawer = Screen->LoadFFC(RunFFCScript(Game->GetFFCScript("drawToLayer"), (int[8]){drawToLayer.TYPE_LW, 7})); //Draw LWeapons above other draws. When `Link->HitWidth/HitHeight` exist, this can be completely redone with EWeapons.
+		loadEnemyData(enemy, data);
+		drawBattleOpening(data);
+		ffc layerdrawer = Screen->LoadFFC(RunFFCScript(Game->GetFFCScript("drawToLayer"), (int[8]){drawToLayer.TYPE_EW, 8})); //Draw EWeapons above other draws.
 		
 		int oldx = Link->X;
 		int oldy = Link->Y;
@@ -120,60 +211,595 @@ dmapdata script randomEncounters
 		Link->Z = 0;
 		//Reset his coordinates to this each frame, moving the heart enemy the difference in coords.
 		int arCursor = 0;
-		while(1) //Battle while
+		DEFINE STATE_MESSAGE = 0;
+		DEFINE STATE_ACTRUN = 1;
+		DEFINE STATE_ACT = 2;
+		DEFINE STATE_DODGE = 3;
+		int state = STATE_MESSAGE;
+		bool battling = true;
+		while(battling) //Battle while
 		{
-			//Run FFC script for ShowStringAndWait, to display opening message. This should load string based on enemy.
-			while(1) //Act/Run Menu while
+			DrawBattleBG(enemy, data);
+			if(DEBUG)
 			{
-				DrawAR(arCursor);
-				DrawEnemy(enemy);
-				if(Link->PressLeft || Link->PressRight)
+				debugMsg(!state ? "MESSAGE" : state == STATE_ACTRUN ? "ACTRUN" : state == STATE_ACT ? "ACT" : "DODGE", 0, true);
+			}
+			switch(state)
+			{
+				case STATE_ACTRUN:
 				{
-					++arCursor;
-					arCursor %= 2;
-				}
-				if(Link->PressA)
-				{
-					if(arCursor)
+					if(Link->PressLeft || Link->PressRight)
 					{
-						//Run
+						++arCursor;
+						arCursor %= 2;
 					}
-					else
+					DrawAR(arCursor);
+					DrawEnemy(enemy, data);
+					if(Link->PressA)
 					{
-						//Act
-						bool quit = false;
-						Waitframe();
-						while(1)
+						if(arCursor)
 						{
-							if(Link->PressB)
+							//Run
+							if(EnemyRun(enemy, data))
 							{
-								quit = true;
+								if(DEBUG) TraceS("Running from battle!\n");
+								layerdrawer->Script = 0;
+								layerdrawer->Data = 0;
+								Link->X = oldx;
+								Link->Y = oldy;
+								Link->Z = oldz;
+								Waitframe();
+								drawBattleClosing(data, true);
+								Screen_Freeze(0);
+								return;
+							}
+							state = STATE_DODGE;
+						}
+						else
+						{
+							//Act
+							bool quit = false;
+							tangoTempI = 0;
+							state = STATE_ACT;
+							RunFFCScript(Game->GetFFCScript("ShowUTBSChoice"), (int[8]){enemy});
+							Waitframe();
+							DrawBattleBG(enemy, data);
+							DrawEnemy(enemy, data);
+							debugMsg("ACT", 0, true);
+							for(int j = 0; j < 5; ++j) //Run a slight delay to make sure that the Tango slot is active
+							{
+								Waitframe();
+								TotalNoAction();
+								DrawBattleBG(enemy, data);
+								DrawEnemy(enemy, data);
+								debugMsg("ACT", 0, true);
+							}
+							while(Tango_SlotIsActive(MainTangoSlot))
+							{
+								Waitframe();
+								DrawBattleBG(enemy, data);
+								DrawEnemy(enemy, data);
+								debugMsg("ACT", 0, true);
+							}
+							if(tangoTempI)
+							{
+								//Respond to choice based on enemy
+								battling = !EnemyAct(enemy, data, tangoTempI);
+								if(!battling) break; //End battle
+								//Go into attack phase (state 3), with set attack variable
+								state = STATE_DODGE;
 								break;
 							}
-							DrawEnemy(enemy);
-							//Do act menu here! Should be Tango menu!
-							Waitframe();
+							state = STATE_ACTRUN;
+							break;
 						}
-						if(quit)
-						{
-							Waitframe();
-							continue;
-						}
-						break;
 					}
+					break;
 				}
+				
+				case STATE_ACT: //This should never run!
+					if(DEBUG) printf("Error occurred during STATE_ACTRUN of enemy %d\n", enemy);
+					Screen_Freeze(0);
+					return;
+				
+				case STATE_DODGE:
+					DrawAttackBox(enemy, data);
+					eweapon target = SpawnTarget(enemy, data);
+					EnemyAttack(target, enemy, data);
+					if(target->isValid())
+					{
+						target->X += 256;
+						target->DeadState = WDS_DEAD;
+					}
+					state = STATE_MESSAGE;
+					break;
+					
+				case STATE_MESSAGE:
+					DrawEnemy(enemy, data);
+					ShowEnemyDialogue(enemy, data);
+					state = STATE_ACTRUN;
+					break;
+					
+				default:
+					if(DEBUG) printf("Invalid state %d!\n", state);
+					battling = false;
 			}
-			
+			Waitframe();
 		}
+		DrawBattleBG(enemy, data);
 		//End battle
-		layerdrawer->Script = 0;
-		layerdrawer->Data = 0;
 		Link->X = oldx;
 		Link->Y = oldy;
 		Link->Z = oldz;
+		DoBattleEnd(enemy, data);
+		layerdrawer->Script = 0;
+		layerdrawer->Data = 0;
+		Waitframe();
+		drawBattleClosing(data, false);
+		Screen_Freeze(0);
+	}//end
+	
+	//start AttackBox
+	void UpdateAttackBoxSize(int width, int height) 
+	{
+		__attackBoxWidth = width;
+		__attackBoxHeight = height;
+		__atkMinX = X_CENTER - (width / 2) + __atkOffX;
+		__atkMaxX = X_CENTER + (width / 2) + __atkOffX;
+		__atkMinY = (TRUE_CENTER_ATK_BOX ? Y_TRUECENTER : Y_CENTER) - (height / 2) + __atkOffY;
+		__atkMaxY = (TRUE_CENTER_ATK_BOX ? Y_TRUECENTER : Y_CENTER) + (height / 2) + __atkOffY;
 	}
-}
+	
+	void UpdateAttackBoxSize()
+	{
+		UpdateAttackBoxSize(ATTACK_BOX_DEFAULT_WIDTH, ATTACK_BOX_DEFAULT_HEIGHT);
+	}
+	
+	void MoveAttackBox(int xoff, int yoff)
+	{
+		__atkOffX += xoff;
+		__atkOffY += yoff;
+	}
+	
+	void ResetAttackBox()
+	{
+		__atkOffX = 0;
+		__atkOffY = 0;
+	}//end
+	
+	void REBitmapInit() //start
+	{
+		//Draw menu gfx to specified bitmap FG_BITMAP, so that they can be re-used below!
+		Screen->SetRenderTarget(FG_BITMAP);
+		Screen->Rectangle(7, 0, 0, 512, 512, 0, 1, 0, 0, 0, true, OP_OPAQUE);
+		//
+		int tw = Ceiling(AR_WIDTH/16.0);
+		int th = Ceiling(AR_HEIGHT/16.0);
+		//BUG WORKAROUND TODO REMOVE
+		if(AR_WIDTH % 16) ++tw;
+		if(AR_HEIGHT % 16) ++th;
+		DEFINE MID_Y = Y_BOTTOM + ((176 - Y_BOTTOM) / 2);
+		for(int yoffs = 0; yoffs <= 176; yoffs += 176)
+		{
+			Screen->Rectangle(7, 0, Y_BOTTOM + yoffs, 255, Y_BOTTOM + ATTACK_BOX_BORDER_WIDTH + yoffs, COLOR_WHITE, 1, 0, 0, 0, true, OP_OPAQUE);
+			Screen->Rectangle(7, 0, Y_BOTTOM + ATTACK_BOX_BORDER_WIDTH + yoffs, 255, 175 + yoffs, COLOR_BLACK, 1, 0, 0, 0, true, OP_OPAQUE);
+			for(int h = 0; h < th; ++h)
+			{
+				int offset = 20 * h;
+				for(int w = 0; w < tw; ++w)
+				{
+					int tile = ULTILE_ACT + w + offset;
+					tile += ((Floor(tile / 20) != Floor((ULTILE_ACT + offset) / 20)) ? (20 * th) : 0);
+					Screen->FastTile(7, X_CENTER - (AR_WIDTH + Floor(AR_SPACING / 2)) + (16 * w), MID_Y - (AR_HEIGHT/2) + (16 * h) + yoffs, tile, yoffs ? AR_CSET_DESEL : AR_CSET_SEL, OP_OPAQUE);
+				}
+			}
+			for(int h = 0; h < th; ++h)
+			{
+				int offset = 20 * h;
+				for(int w = 0; w < tw; ++w)
+				{
+					int tile = ULTILE_RUN + w + offset;
+					tile += ((Floor(tile / 20) != Floor((ULTILE_RUN + offset) / 20)) ? (20 * th) : 0);
+					Screen->FastTile(7, X_CENTER + Floor(AR_SPACING / 2) + (16 * w), MID_Y - (AR_HEIGHT/2) + (16 * h) + yoffs, tile, yoffs ? AR_CSET_SEL : AR_CSET_DESEL, OP_OPAQUE);
+				}
+			}
+		}
+		Screen->FastCombo(7, X_CENTER - (AR_WIDTH + Floor(AR_SPACING / 2)) - 16, MID_Y - (AR_HEIGHT/4), TANGO_MENU_CURSOR_COMBO, TANGO_MENU_CURSOR_CSET, OP_OPAQUE);
+		Screen->FastCombo(7, X_CENTER + Floor(AR_SPACING / 2) - 16, MID_Y - (AR_HEIGHT/4) + 176, TANGO_MENU_CURSOR_COMBO, TANGO_MENU_CURSOR_CSET, OP_OPAQUE);
+		//Build FG data (Act/Run buttons, letterbox, etc)
+		Screen->SetRenderTarget(RT_SCREEN);
+	}//end
+	
+	void DrawBattleBG(int enemy, untyped data) //start
+	{
+		for(int x = 0; x < 256; x += 16)
+		{
+			for(int y = USE_SUBSCREEN_SPACE ? -64 : 0; y < 176; y += 16)
+			{
+				Screen->FastCombo(7, x, y, COMBO_BG, CSET_BG, OP_OPAQUE);
+			}
+		}
+	}//end
+	
+	void DrawAR(int cursor) //start
+	{
+		//Draw the Act/Run menu from the FG_BITMAP, as initialized by REBitmapInit() above.
+		DEFINE YOFF = cursor ? 176 : 0;
+		Screen->DrawBitmap(7, FG_BITMAP, 0, Y_BOTTOM + YOFF, 256, 176 - Y_BOTTOM, 0, Y_BOTTOM, 256, 176 - Y_BOTTOM, 0, true);
+	}//end
 
+	void DrawAttackBox(int enemy, untyped data) //start
+	{
+		Screen->Rectangle(7, __atkMinX - ATTACK_BOX_BORDER_WIDTH, __atkMinY - ATTACK_BOX_BORDER_WIDTH, __atkMaxX + ATTACK_BOX_BORDER_WIDTH, __atkMaxY + ATTACK_BOX_BORDER_WIDTH, COLOR_WHITE, 1, 0, 0, 0, true, OP_OPAQUE);
+		Screen->Rectangle(7, __atkMinX, __atkMinY, __atkMaxX, __atkMaxY, COLOR_BLACK, 1, 0, 0, 0, true, OP_OPAQUE);
+	}//end
+	
+	void DuringAttackDraw(int enemy, untyped data) //start
+	{
+		DrawBattleBG(enemy, data);
+		if(SHOW_ENEMY_DURING_ATTACK) DrawEnemy(enemy, data);
+		DrawAttackBox(enemy, data);
+	}//end
+	
+	void DrawEnemy(int enemy, untyped data) //start
+	{
+		int width, height, ultile, cset = 0, aframes = 1, aspeed = 1, xskip = 0;
+		bool transparent = false;
+		switch(enemy)
+		{
+			case ENM.TUTORIAL:
+			{
+				ultile = 52000;
+				width = 14;
+				height = 32;
+				aframes = 2;
+				aspeed = 17;
+				xskip = 1;
+				//Draw the Tutorial enemy to the screen
+				break;
+			}
+			
+			case ENM.FRISK:
+			{
+				//Draw the Frisk enemy to the screen
+				ultile = 86;
+				width = 16;
+				height = 16;
+				break;
+			}
+			
+			default:
+				if(DEBUG) printf("Enemy %d has no drawing info!", enemy);
+				return;
+		}
+		int tw = Ceiling(width/16.0);
+		int th = Ceiling(height/16.0);
+		//BUG WORKAROUND TODO REMOVE
+		if(width % 16) ++tw;
+		if(height % 16) ++th;
+		//
+		int frameoff = Floor((globalTimer % (aspeed * aframes)) / aspeed) * (1 + xskip);
+		//if(DEBUG) printf("EN: %d .. TW: %d .. TH: %d .. FOFF: %d\n", enemy, tw, th, frameoff);
+		if(DEBUG)
+		{
+			TraceS("TEST:\n");
+			int x = 14;
+			x /= 16;
+			Trace(14/16.0);
+			Trace(Ceiling(14/16.0));
+			Trace(0.875);
+			Trace(x);
+			TraceS("TEST2:\n");
+			int y = 30;
+			y /= 16;
+			Trace(30/16.0);
+			Trace(Ceiling(30/16.0));
+			Trace(1.875);
+			Trace(y);
+			TraceS("FinalTest:\n");
+			Trace(width/16);
+			Trace(Ceiling(width/16));
+			Trace(width/16.0);
+			Trace(Ceiling(width/16.0));
+		}
+		for(int h = 0; h < th; ++h)
+		{
+			int offset = 20 * h;
+			for(int w = 0; w < tw; ++w)
+			{
+				int tile = ultile + w + offset + frameoff;
+				tile += ((Floor(tile / 20) != Floor((ultile + offset) / 20)) ? (20 * th) : 0);
+				Screen->FastTile(7, X_CENTER - Floor(width/2) + (16 * w), Y_BOTTOM - height + (16 * h), tile, cset, transparent ? OP_TRANS : OP_OPAQUE);
+			}
+		}
+	}//end
+
+	void drawBattleOpening(untyped data) //Put code here for a transition effect, including the full draws and timing. It will be played automatically at the correct time. start
+	{
+		if(DEBUG) debugMsg("drawBattleOpening", 0, true);
+	}//end
+
+	void drawBattleClosing(untyped data, bool ran) //Put code here for a transition effect, including the full draws and timing. It will be played automatically at the correct time. start
+	{
+		//"ran" will be true if the player ran away, false if they successfully won the battle. Game-over is handled seperately.
+		if(DEBUG) debugMsg("drawBattleClosing", 0, true);
+	}//end
+
+	void loadEnemyData(int enemy, untyped data) //start
+	{
+		if(DEBUG) debugMsg("loadEnemyData", 0, true);
+		switch(enemy)
+		{
+			case ENM.TUTORIAL:
+				//Do whatever you want here with the data array.
+				MoveAttackBox(0, -16);
+				data[DATA_ATTACK] = -1;
+				break;
+			case ENM.FRISK:
+				//Do whatever you want here with the data array.
+				break;
+			default:
+				if(DEBUG>1) printf("Enemy %d has no data.\n", enemy);
+		}
+	}//end
+
+	bool EnemyAct(int enemy, untyped data, int choice) //start
+	{
+		bool ended = false;
+		if(DEBUG) debugMsg("EnemyAct", 0, true);
+		//Set 'ended' true to win battle, false to continue battle.
+		//Choice is the number from `ShowUTBSChoice` that was chosen.
+		//Calling `ShowEnemyDialogue(enemy, data)` will allow you to display a response message
+		switch(enemy)
+		{
+			case ENM.TUTORIAL:
+				data[DATA_LASTACT] = choice;
+				data[DATA_RAN] = false;
+				if(data[DATA_SPARABLE] && choice == 4) ended = true;
+				//probably want a `switch(choice)` here, but this enemy doesn't need it.
+				ShowEnemyDialogue(enemy, data);
+				break;
+			case ENM.FRISK:
+				
+				break;
+			default:
+				if(DEBUG) printf("No Act code for enemy %d", enemy);
+				return true;
+		}
+		return ended;
+	}//end
+
+	bool EnemyRun(int enemy, untyped data) //start
+	{
+		if(DEBUG) debugMsg("EnemyRun", 0, true);
+		//Return true to escape battle, false to continue.
+		switch(enemy)
+		{
+			case ENM.TUTORIAL:
+			{
+				data[DATA_RAN] = true;
+				return false;
+			}
+			
+			default: return true;
+		}
+	}//end
+	
+	void EnemyAttack(eweapon target, int enemy, untyped data) //start
+	{
+		int timer = 0;
+		while(1)
+		{
+			DuringAttackDraw(enemy, data);
+			if(DEBUG) debugMsg("EnemyAttack", 0, true);
+			switch(enemy)
+			{
+				case ENM.TUTORIAL:
+					if(data[DATA_ATTACK] == -1)
+					{
+						//Draw over the battle box.
+						DrawBattleBG(enemy, data);
+						DrawEnemy(enemy, data);
+						return;
+					}
+					if(timer > 120)
+					{
+						data[DATA_ATTACK] = -1;
+						return;
+					}
+					break;
+				case ENM.FRISK:
+					//TODO Spawn fireballs randomly, aiming toward the target
+					if(timer > 120) return;
+					break;
+			}
+			if(DEBUG) Screen->DrawString(7, __atkMinX, __atkMinY, FONT_Z3SMALL, 0x01/*white*/, 0x0F/*black*/, TF_NORMAL, "Battle system INCOMPLETE!", OP_OPAQUE); 
+			++timer;
+			timer %= MAX_TIMER;
+			Waitframe();
+		}
+	}//end
+	
+	void ShowEnemyDialogue(int enemy, untyped data) //start
+	{
+		if(DEBUG) debugMsg("ShowEnemyDialogue", 0, true);
+		bool doAnother; //Set this to true to have this function run again immediately, for multiple messages in a row.
+		do
+		{
+			doAnother = false;
+			int buf[4192];
+			switch(enemy)
+			{
+				case ENM.TUTORIAL:
+					if(data[DATA_RAN])
+					{
+						strcpy(buf, "Like I sed, Run jus' ends da battle, n' I'm s'posed ta show ye how to get tru wunna dese, so pick Act dis time n' we can move on.");
+						break; //break 'enemy' switch
+					}
+					if(data[DATA_LASTACT])
+					{
+						if(data[DATA_SPARABLE] && data[DATA_LASTACT] != 4)
+						{
+							strcpy(buf, "\"No, we already did all dat for now. Best to move on.\"");
+							data[DATA_LASTACT] = 0;
+						}
+						else
+							switch(data[DATA_LASTACT])
+							{
+								case 1: //Check
+									strcpy(buf, "CREEPY GUY:@char(26)Not very violent. Attacks with fireballs. Don't insult his accent unless you want to anger him.");
+									data[DATA_LASTACT] = 0;
+									break;
+								case 2: //Jig
+									strcpy(buf, "(You do a jig similar to his, trying to match his low framerate. Poorly.)");
+									data[DATA_ATTACK] = 0;
+									data[DATA_LASTACT] = 0;
+									data[DATA_MSG] = 5;
+									break;
+								case 3: //Insult accent
+									if(data[DATA_TEMP])
+									{
+										strcpy(buf, "\"Oi, da point is ta not make me wanna fight ye, now yer in for it!\"");
+										data[DATA_TEMP] = 0;
+										data[DATA_ATTACK] = 0;
+										data[DATA_LASTACT] = 0;
+										data[DATA_MSG] = 4;
+										++data[DATA_DIFFICULTY];
+									}
+									else
+									{
+										strcpy(buf, "(You do your best impression of this guy's terrible voice.)");
+										data[DATA_ATTACK] = 0;
+										doAnother = true;
+										data[DATA_TEMP] = 1;
+									}
+									break;
+								case 4: //Spare
+									if(data[DATA_SPARABLE])
+									{
+										strcpy(buf, "\"Dere we go! Dat's it for da tutorial.\"");
+									}
+									else
+									{
+										strcpy(buf, "\"We ain't don wit da tutorial yet! Try doin' somethin' else!\"");
+									}
+									data[DATA_LASTACT] = 0;
+									break;
+							}
+					}
+					else
+						switch(data[DATA_MSG])
+						{
+							case 0:
+								strcpy(buf, "CREEPY GUY wants to do a tutorial battle!");
+								doAnother = true;
+								++data[DATA_MSG];
+								break;
+								
+							case 1:
+								strcpy(buf, "\"This here's wot we in da trade call an Ultimate Tolerance Battle, er jus' a 'UT Battle' for short. @pressa()@char(26)Yeh see, not everythin's gotta be solved wif violence, sometimes ye can jus' talk things out. @pressa()@char(26)At da start here, yeh have two options, Act and Run. Run does wot ye'd think it does, and Act is for pretteh much everythin' else. Ye can press Left n' Right to pick a button, den A to confirm it. @pressa()@char(26)Jus' go ahead and pick somethin' from the 'Act' menu!\"");
+								doAnother = true;
+								++data[DATA_MSG];
+								break;
+								
+							case 2:
+								strcpy(buf, "\"Once you pick 'Act', ye pick wot ta do to yer opponent. Ye will have several options, so pick da one dat makes da most sense for da sitiation. @pressa()@char(26)Use da arrow keys ta choose, den A ta confirm. Try now!\"");
+								++data[DATA_MSG];
+								break;
+								
+							case 3: //Silence
+								return;
+							
+							case 4:
+								strcpy(buf, "\"Whene'r ye Act, ye'll hafta dodge some attacks like dat. But if ye pick da wrong option, da attacks might be worse, and ye won't progress!\"");
+								data[DATA_MSG] = 3;
+								break;
+								
+							case 5:
+								strcpy(buf, "\"Good pick! Da key is ta make yer opponent not wanna fight yeh. Ye'll still hafta dodge some attacks like dat, but dey'll go easy on yeh if ye pick right. In a normal battle, ye'd hafta do dis a few times ta reach da end, but we can cut it short for trainin'. Once dey don't wanna fight anymore, you can choose 'Spare' in da ACT menu, and end da battle. Ye'll get some rewards when ye do, like rupees or even a Heart Piece! Ye also get fully healed after yer done.\"");
+								data[DATA_SPARABLE] = true;
+								data[DATA_MSG] = 6;
+								break;
+								
+							case 6:
+								strcpy(buf, "\"We're done here. Time fer ya to pick da 'Spare' option to end da battle.\"");
+						}
+					break;
+				case ENM.FRISK:
+					strcpy(buf, "This is a message from FRISK.");
+					break;
+				default:
+					strcpy(buf, "ERROR: ENEMY NOT FOUND!");
+			}
+			RunFFCScript(Game->GetFFCScript("ShowString"), (int[8]){buf});
+			for(int j = 0; j < 5; ++j) //Run a slight delay to make sure that the Tango slot is active
+			{
+				Waitframe();
+				TotalNoAction();
+				DrawBattleBG(enemy, data);
+				DrawEnemy(enemy, data);
+				if(DEBUG) debugMsg("ShowEnemyDialogue", 0, true);
+			}
+			while(Tango_SlotIsActive(MainTangoSlot))
+			{
+				Waitframe();
+				DrawBattleBG(enemy, data);
+				DrawEnemy(enemy, data);
+				if(DEBUG) debugMsg("ShowEnemyDialogue", 0, true);
+			}
+		} while(doAnother);
+	}//end
+	
+	void DoBattleEnd(int enemy, int data) //start
+	{
+		DrawBattleBG(enemy, data);
+		if(DEBUG) debugMsg("DoBattleEnd", 0, true);
+		int buf[4192];
+		int rewardItem = -1;
+		switch(enemy)
+		{
+			case ENM.TUTORIAL:
+				strcpy(buf, "Rupees:  20@char(26)EXP:    30");
+				//rewardItem = 38; This would give a red rupee item to the player
+				Game->DCounter[CR_RUPEES] += 20; //This adds 20 rupees directly to the counter
+				//Game->DCounter[CR_SCRIPT1] += 30; //Example for EXP of some sort
+				break;
+		}
+		if(rewardItem > -1) CreateItemAt(rewardItem, Link->X, Link->Y);
+		if(buf[0])
+		{
+			RunFFCScript(Game->GetFFCScript("ShowString"), (int[8]){buf});
+			for(int j = 0; j < 5; ++j) //Run a slight delay to make sure that the Tango slot is active
+			{
+				Waitframe();
+				DrawBattleBG(enemy, data);
+				TotalNoAction();
+				if(DEBUG) debugMsg("DoBattleEnd", 0, true);
+			}
+			while(Tango_SlotIsActive(MainTangoSlot))
+			{
+				Waitframe();
+				DrawBattleBG(enemy, data);
+				if(DEBUG) debugMsg("DoBattleEnd", 0, true);
+			}
+		}
+		return;
+	}//end
+	
+	eweapon SpawnTarget(int enemy, untyped data) //start
+	{
+		eweapon target = Screen->CreateEWeapon(EW_SCRIPT10);
+		target->X = 128;
+		target->Y = 80;
+		target->Script = /*Game->GetEWeaponScript("LinkTargetHandler");*/1;
+		target->HitHeight = MARKER_HEIGHT;
+		target->HitWidth = MARKER_WIDTH;
+		target->OriginalTile = TILE_HEART;
+		return target;
+	}//end
+}//end
+
+//start Misc Functions
 DEFINE COMBO_FRZ1 = 38400;
 DEFINE COMBO_FRZ2 = 38401;
 bool isFrozen = false;
@@ -201,6 +827,131 @@ void Screen_Freeze(int freeze) //start
 		isFrozen=false;
 	}
 }//end
+
+void debugDraw(int label, int num, int index, bool right) //start
+{
+	if(right)
+	{
+		Screen->DrawString(7,256,index*6 - (USE_SUBSCREEN_SPACE ? 56 : 0),FONT_Z3SMALL,0x01,0x00,TF_RIGHT,label,OP_OPAQUE);
+		int buf[16];
+		itoa(buf, num);
+		Screen->DrawString(7,256 ,index*6 - (USE_SUBSCREEN_SPACE ? 56 : 0),FONT_Z3SMALL,0x01,0x00,TF_RIGHT,buf,OP_OPAQUE);
+	}
+	else
+	{
+		int buf[1024];
+		strcat(buf, label);
+		itoa(buf, strlen(buf), num);
+		Screen->DrawString(7,0,index*6 - (USE_SUBSCREEN_SPACE ? 56 : 0),FONT_Z3SMALL,0x01,0x00,TF_NORMAL,buf,OP_OPAQUE);
+	}
+}//end
+
+void debugMsg(int label, int index, bool right)
+{
+	Screen->DrawString(7,right ? 256 : 0,index*6 - (USE_SUBSCREEN_SPACE ? 56 : 0),FONT_Z3SMALL,0x01,0x00,right ? TF_RIGHT : TF_NORMAL,label,OP_OPAQUE);
+}
+
+void TotalNoAction()//start
+{
+	NoAction();
+	Link->PressStart=false;
+	Link->InputStart=false;
+}//end
+
+void NoDirs()//start
+{
+	Link->InputDown=false;Link->PressDown=false;
+	Link->InputRight=false;Link->PressRight=false;
+	Link->InputLeft=false;Link->PressLeft=false;
+	Link->InputUp=false;Link->PressUp=false;
+}//end
+//end
+ffc script ShowUTBSChoice //start
+{
+	void run(int enemy)
+	{
+		switch(enemy)
+		{
+			case ENM.TUTORIAL:
+				ShowStringAndWait("@choice(1)Check           Do a jig@choice(2)@26@choice(3)Insult accent        Spare@choice(4)@domenu(1)@set(@ttempi @chosen)@close()", true);
+				break;
+			case ENM.FRISK:
+				ShowStringAndWait("@choice(1)Check     @choice(2)Stare@26@choice(3)Punch@domenu(1)@set(@ttempi @chosen)@close()", true);
+				break;
+			default:
+				if(DEBUG) printf("Enemy %d has no `ShowUTBSChoice()` case!\n", enemy);
+		}
+	}
+}//end
+
+//start CanWalkM
+//lweapon
+bool CanWalkM(lweapon weap, mapdata map, int dir, int step)
+{
+	return CanWalkM(weap, map, dir, step, false);
+}
+
+bool CanWalkM(lweapon weap, mapdata map, int dir, int step, bool useHit)
+{
+	if(!weap->isValid())return false;
+	return CanWalkM(weap->X, weap->Y, weap->X + Cond(useHit, weap->HitWidth, weap->TileWidth * 16) - 1, weap->Y + Cond(useHit, weap->HitHeight, weap->TileHeight * 16) - 1, map, dir, step);
+}
+//eweapon
+bool CanWalkM(eweapon weap, mapdata map, int dir, int step)
+{
+	return CanWalkM(weap, map, dir, step, false);
+}
+
+bool CanWalkM(eweapon weap, mapdata map, int dir, int step, bool useHit)
+{
+	if(!weap->isValid())return false;
+	return CanWalkM(weap->X, weap->Y, weap->X + Cond(useHit, weap->HitWidth, weap->TileWidth * 16) - 1, weap->Y + Cond(useHit, weap->HitHeight, weap->TileHeight * 16) - 1, map, dir, step);
+}
+//npc
+bool CanWalkM(npc n, mapdata map, int dir, int step)
+{
+	return CanWalkM(n, map, dir, step, false);
+}
+
+bool CanWalkM(npc n, mapdata map, int dir, int step, bool useHit)
+{
+	if(!n->isValid())return false;
+	return CanWalkM(n->X, n->Y, n->X + Cond(useHit, n->HitWidth, n->TileWidth * 16) - 1, n->Y + Cond(useHit, n->HitHeight, n->TileHeight * 16) - 1, map, dir, step);
+}
+//ffc
+bool CanWalkM(ffc f, mapdata map, int dir, int step)
+{
+	return CanWalkM(f, map, dir, step, false);
+}
+
+bool CanWalkM(ffc f, mapdata map, int dir, int step, bool useEffect)
+{
+	return CanWalkM(f->X, f->Y, f->X + Cond(useEffect, f->EffectWidth, f->TileWidth * 16) - 1, f->Y + Cond(useEffect, f->EffectHeight, f->TileHeight * 16) - 1, map, dir, step);
+}
+//Link
+bool CanWalkM(mapdata map, int dir, int step, bool largeHitbox)
+{
+	return CanWalkM(Link->X, Link->Y + Cond(largeHitbox, 0, 8), Link->X + 15, Link->Y + 15, map, dir, step);
+}
+//Main
+bool CanWalkM(int x, int y, int xx, int yy, mapdata map, int dir, int step)
+{
+	int width = xx - x + 1;
+	int height = yy - y + 1;
+    switch(dir)
+	{
+		case DIR_UP: return !(y-step<0||map->isSolid(x,y-step)||map->isSolid(x+Floor(width/2),y-step)||map->isSolid(xx,y-step));
+		case DIR_DOWN: return !(yy+step>=176||map->isSolid(x,yy+step)||map->isSolid(x+Floor(width/2),yy+step)||map->isSolid(xx,yy+step));
+		case DIR_LEFT: return !(x-step<0||map->isSolid(x-step,y)||map->isSolid(x-step,y+Floor(height/2))||map->isSolid(x-step,yy));
+		case DIR_RIGHT: return !(xx+step>=256||map->isSolid(xx+step,y)||map->isSolid(xx+step,y+Floor(height/2))||map->isSolid(xx+step,yy));
+		case DIR_LEFTUP: return (CanWalkM(x, y, xx, yy, map, DIR_LEFT, step) && CanWalkM(x, y, xx, yy, map, DIR_UP, step));
+		case DIR_LEFTDOWN: return (CanWalkM(x, y, xx, yy, map, DIR_LEFT, step) && CanWalkM(x, y, xx, yy, map, DIR_DOWN, step));
+		case DIR_RIGHTUP: return (CanWalkM(x, y, xx, yy, map, DIR_RIGHT, step) && CanWalkM(x, y, xx, yy, map, DIR_UP, step));
+		case DIR_RIGHTDOWN: return (CanWalkM(x, y, xx, yy, map, DIR_RIGHT, step) && CanWalkM(x, y, xx, yy, map, DIR_DOWN, step));
+	}
+	return false; //invalid direction
+}
+//end CanWalkM
 
 ffc script drawToLayer //start
 {
@@ -299,53 +1050,55 @@ ffc script drawToLayer //start
 	}
 }//end
 
-void debugDraw(int label, int num, int index, bool right) //start
+mapdata GetCurMapdata() //start
 {
-	if(right)
-	{
-		Screen->DrawString(7,256,index*6,FONT_Z3SMALL,0x01,0x00,TF_RIGHT,label,OP_OPAQUE);
-		int buf[16];
-		itoa(buf, num);
-		Screen->DrawString(7,256 ,index*6,FONT_Z3SMALL,0x01,0x00,TF_RIGHT,buf,OP_OPAQUE);
-	}
-	else
-	{
-		int buf[1024];
-		strcat(buf, label);
-		itoa(buf, strlen(buf), num);
-		Screen->DrawString(7,0,index*6,FONT_Z3SMALL,0x01,0x00,TF_NORMAL,buf,OP_OPAQUE);
-	}
+	return Game->LoadMapData(Game->GetCurMap(), Game->GetCurScreen());
 }//end
 
-void drawBattleOpening() //Put code here for a transition effect, including the full draws and timing. It will be played automatically at the correct time. start
+eweapon script LinkTargetHandler //start
 {
-	
-}//end
-
-void REBitmapInit() //start
-{
-	//Draw menu gfx to specified bitmaps BG_BITMAP and FG_BITMAP, so that they can be re-used below!
-}//end
-
-void DrawEnemy(int enemy) //start
-{
-	switch(enemy)
+	void run(int x, int y)
 	{
-		case ENM_TUTORIAL:
+		while(this->isValid())
 		{
-			//Draw the Tutorial enemy to the screen
-			break;
-		}
-		
-		case ENM_FRISK:
-		{
-			//Draw the Frisk enemy to the screen
-			break;
+			while(Link->X > x && CanWalkM(this, GetCurMapdata(), DIR_RIGHT, 1, true))
+			{
+				++this->X; --Link->X;
+			}
+			while(Link->X < x && CanWalkM(this, GetCurMapdata(), DIR_LEFT, 1, true))
+			{
+				--this->X; ++Link->X;
+			}
+			while(Link->Y > y && CanWalkM(this, GetCurMapdata(), DIR_DOWN, 1, true))
+			{
+				++this->Y; --Link->Y;
+			}
+			while(Link->Y < y && CanWalkM(this, GetCurMapdata(), DIR_UP, 1, true))
+			{
+				--this->Y; ++Link->Y;
+			}
+			Link->X = x;
+			Link->Y = y;
+			//Move any eweapons colliding with this one to Link's position, to hit him!
+			for(int j = Screen->NumEWeapons(); j > 0; --j)
+			{
+				eweapon other = Screen->LoadEWeapon(j);
+				if(this==other) continue;
+				if(Collision(this, other))
+				{
+					other->X = Link->X;
+					other->Y = Link->Y;
+				}
+			}
+			Waitframe();
 		}
 	}
 }//end
 
-void DrawAR(int cursor)//start
+ffc script ShowString
 {
-	//Draw the Act/Run menu from the FG_BITMAP, as initialized by REBitmapInit() above.
-}//end
+	void run(int str)
+	{
+		ShowStringAndWait(str);
+	}
+}
