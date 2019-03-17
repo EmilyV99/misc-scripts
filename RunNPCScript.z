@@ -1,0 +1,15 @@
+npc RunNPCScript(int ID, int scriptNum, float args)
+{
+    // Invalid script
+    if(scriptNum < 0 || scriptNum > 511)
+        return Debug->NULL();
+    
+	npc n = Screen->CreateNPC(ID);
+	n->Script = scriptNum;
+	if (args)
+	{
+		for (int q = SizeOfArray(args) - 1; q >= 0; --q)
+			n->InitD[q] = args[q];
+	}
+	return n;
+}

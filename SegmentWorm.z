@@ -1,0 +1,106 @@
+typedef const int DEFINE; //DEFINE constants should not be changed unless you know what you are doing!
+typedef const int CONFIG; //CONFIG constants can be changed as you wish, usually with directions as to what they should be.
+typedef untyped u;
+
+CONFIG TILE_INVIS = 5; //Invisible tile
+CONFIG WORM_SEGMENT_DISTANCE = 16;
+DEFINE WORM_SEGMENT_DELAY = WORM_SEGMENT_DISTANCE; //The indexes 0 - WORM_SEGMENT_DELAY of worm->Misc[] are used for movement calculations. Messing with this number can have adverse effects.
+
+npc script worm
+{
+	void run(int segments, int turntime, npc front, npc back)
+	{
+		this->ScriptTile = TILE_INVIS;
+		if(!front->isValid())//If this is the first head
+		{
+			this->Dir = Rand(8);//Any 8-dir direction
+		}
+		if(--segments)
+		{
+			//Create the segment behind this one
+			back = RunNPCScript(this->ID, this->Script, (u[8]){segments, turntime, this, 0});
+			back->Dir = this->Dir;
+			if(CanWalkM(this, CurMapdata(), OppositeDir(this->Dir), 16))
+			{
+				back->X = this->X - (dirX(this->Dir) * WORM_SEGMENT_DISTANCE);
+				back->Y = this->Y - (dirY(this->Dir) * WORM_SEGMENT_DISTANCE);
+				if(back->X < 0 || back->X > 240)
+				{
+					back->X = VBound(back->X,240,0);
+					back->Dir = remX(back->Dir);
+				}
+				if(back->Y < 0 || back->Y > 160)
+				{
+					back->Y = VBound(back->Y,160,0);
+					back->Dir = remY(back->Dir);
+				}
+			}
+			else
+			{
+				back->Dir = -1;
+				back->X = this->X;
+				back->Y = this->Y;
+			}
+			for(int q = 0; q <= WORM_SEGMENT_DELAY; ++q)
+				back->Misc[q] = back->Dir;
+			if(back->Dir==-1)back->Dir = this->Dir;
+		}
+		while(front->isValid())
+		{
+			if(!back->isValid())
+			{
+				this->OriginalTile += 40;//Go to row 3 for tail sprite
+				while(front->isValid())
+				{
+					if(this->Misc[0] != -1)
+					{
+						this->Dir = this->Misc[0];
+						this->X = VBound(this->X + dirX(this->Dir),240,0);
+						this->Y = VBound(this->Y + dirY(this->Dir),160,0);
+						//this->ConstantWalk8({100,100,100});
+					}
+					for(int q = 0; q < WORM_SEGMENT_DELAY; ++q)
+						this->Misc[q] = this->Misc[q+1];
+					MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
+					Waitframe();
+				}
+				//Only 1 segment; cannot survive!
+				this->HP = 0;
+				Quit();
+			}
+			if(this->Misc[0] != -1)
+			{
+				this->Dir = this->Misc[0];
+				this->X = VBound(this->X + dirX(this->Dir),240,0);
+				this->Y = VBound(this->Y + dirY(this->Dir),160,0);
+				//this->ConstantWalk8({100,100,100});
+			}
+			back->Misc[WORM_SEGMENT_DELAY] = this->Misc[0];
+			for(int q = 0; q < WORM_SEGMENT_DELAY; ++q)
+				this->Misc[q] = this->Misc[q+1];
+			MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
+			Waitframe();
+		}
+		this->OriginalTile += 20;//Go to row 2 for head sprite
+		int timer = turntime;
+		while(back->isValid())
+		{
+			if(!(--timer) || !CanWalkM(this, CurMapdata(), this->Dir, 1))
+			{
+				timer = turntime;
+				do
+				{
+					this->Dir = R_SpinDir8(this->Dir, Choose(1,-1));
+				} while(!CanWalkM(this, CurMapdata(), this->Dir, 1));
+			}
+			this->X = VBound(this->X + dirX(this->Dir),240,0);
+			this->Y = VBound(this->Y + dirY(this->Dir),160,0);
+			//this->ConstantWalk8({100,100,100});
+			back->Misc[WORM_SEGMENT_DELAY] = this->Dir;
+			MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
+			Waitframe();
+		}
+		//Only 1 segment; cannot survive!
+		this->HP = 0;
+	}
+}
