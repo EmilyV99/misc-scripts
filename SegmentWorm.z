@@ -1,11 +1,36 @@
+/**
+* Author: Venrob
+* Version: 1.0
+* Release: 24 May, 2019
+* Dependencies: "VenrobMisc.zh" version 1.0
+*/
+
+#option HEADER_GUARD on
+#option TRUNCATE_DIVISION_BY_LITERAL_BUG off
+#option SHORT_CIRCUIT on
+#option BOOL_TRUE_RETURN_DECIMAL off
+#include "VenrobMisc.zh"
+
 typedef const int DEFINE; //DEFINE constants should not be changed unless you know what you are doing!
 typedef const int CONFIG; //CONFIG constants can be changed as you wish, usually with directions as to what they should be.
-typedef untyped u;
+typedef untyped u; //Just for shorthand, doesn't mean anything special.
 
 CONFIG TILE_INVIS = 5; //Invisible tile
-CONFIG WORM_SEGMENT_DISTANCE = 16;
+CONFIG WORM_SEGMENT_DISTANCE = 16; //Space between segments. Affects compactness of the worm.
 DEFINE WORM_SEGMENT_DELAY = WORM_SEGMENT_DISTANCE; //The indexes 0 - WORM_SEGMENT_DELAY of worm->Misc[] are used for movement calculations. Messing with this number can have adverse effects.
 
+/**
+* D0: Number of segments for this worm. Minimum 2.
+* D1: Number of frames to wait before turning. Will turn sooner if it hits a wall.
+* D2: Leave this at 0. Used by the script.
+* D3: Leave this at 0. Used by the script.
+* D4+: Unused
+* 
+* Tile setup: For whatever animation style you use, make it 3 rows tall.
+* The first row should be a middle segment.
+* The second row should be a head segment.
+* The third row should be a tail segment.
+*/
 npc script worm
 {
 	void run(int segments, int turntime, npc front, npc back)
@@ -18,21 +43,21 @@ npc script worm
 		if(--segments)
 		{
 			//Create the segment behind this one
-			back = RunNPCScript(this->ID, this->Script, (u[8]){segments, turntime, this, 0});
+			back = Venrob::RunNPCScript(this->ID, this->Script, (u[8]){segments, turntime, this, 0});
 			back->Dir = this->Dir;
-			if(CanWalkM(this, CurMapdata(), OppositeDir(this->Dir), 16))
+			if(Venrob::CanWalkM(this, Venrob::CurMapdata(), OppositeDir(this->Dir), 16))
 			{
-				back->X = this->X - (dirX(this->Dir) * WORM_SEGMENT_DISTANCE);
-				back->Y = this->Y - (dirY(this->Dir) * WORM_SEGMENT_DISTANCE);
+				back->X = this->X - (Venrob::dirX(this->Dir) * WORM_SEGMENT_DISTANCE);
+				back->Y = this->Y - (Venrob::dirY(this->Dir) * WORM_SEGMENT_DISTANCE);
 				if(back->X < 0 || back->X > 240)
 				{
 					back->X = VBound(back->X,240,0);
-					back->Dir = remX(back->Dir);
+					back->Dir = Venrob::remX(back->Dir);
 				}
 				if(back->Y < 0 || back->Y > 160)
 				{
 					back->Y = VBound(back->Y,160,0);
-					back->Dir = remY(back->Dir);
+					back->Dir = Venrob::remY(back->Dir);
 				}
 			}
 			else
@@ -55,13 +80,13 @@ npc script worm
 					if(this->Misc[0] != -1)
 					{
 						this->Dir = this->Misc[0];
-						this->X = VBound(this->X + dirX(this->Dir),240,0);
-						this->Y = VBound(this->Y + dirY(this->Dir),160,0);
+						this->X = VBound(this->X + Venrob::dirX(this->Dir),240,0);
+						this->Y = VBound(this->Y + Venrob::dirY(this->Dir),160,0);
 						//this->ConstantWalk8({100,100,100});
 					}
 					for(int q = 0; q < WORM_SEGMENT_DELAY; ++q)
 						this->Misc[q] = this->Misc[q+1];
-					MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
+					Venrob::MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
 					Waitframe();
 				}
 				//Only 1 segment; cannot survive!
@@ -71,33 +96,34 @@ npc script worm
 			if(this->Misc[0] != -1)
 			{
 				this->Dir = this->Misc[0];
-				this->X = VBound(this->X + dirX(this->Dir),240,0);
-				this->Y = VBound(this->Y + dirY(this->Dir),160,0);
+				this->X = VBound(this->X + Venrob::dirX(this->Dir),240,0);
+				this->Y = VBound(this->Y + Venrob::dirY(this->Dir),160,0);
 				//this->ConstantWalk8({100,100,100});
 			}
 			back->Misc[WORM_SEGMENT_DELAY] = this->Misc[0];
 			for(int q = 0; q < WORM_SEGMENT_DELAY; ++q)
 				this->Misc[q] = this->Misc[q+1];
-			MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
+			Venrob::MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
 			Waitframe();
 		}
 		this->OriginalTile += 20;//Go to row 2 for head sprite
 		int timer = turntime;
 		while(back->isValid())
 		{
-			if(!(--timer) || !CanWalkM(this, CurMapdata(), this->Dir, 1))
+			if(!(--timer) || !Venrob::CanWalkM(this, Venrob::CurMapdata(), this->Dir, 1))
 			{
 				timer = turntime;
+				mapdata curScreen = Venrob::CurMapdata();
 				do
 				{
-					this->Dir = R_SpinDir8(this->Dir, Choose(1,-1));
-				} while(!CanWalkM(this, CurMapdata(), this->Dir, 1));
+					this->Dir = Venrob::SpinDir8(this->Dir, Choose(1,-1));
+				} while(!Venrob::CanWalkM(this, curScreen, this->Dir, 1));
 			}
-			this->X = VBound(this->X + dirX(this->Dir),240,0);
-			this->Y = VBound(this->Y + dirY(this->Dir),160,0);
+			this->X = VBound(this->X + Venrob::dirX(this->Dir),240,0);
+			this->Y = VBound(this->Y + Venrob::dirY(this->Dir),160,0);
 			//this->ConstantWalk8({100,100,100});
 			back->Misc[WORM_SEGMENT_DELAY] = this->Dir;
-			MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
+			Venrob::MooshDrawTile(6, this->X+8, this->Y+8, this->OriginalTile, 1, 1, this->CSet, -1, -1, this->X+8, this->Y+8, DirAngle(this->Dir), 0, true, OP_OPAQUE);
 			Waitframe();
 		}
 		//Only 1 segment; cannot survive!

@@ -1,177 +1,256 @@
-//start Misc Functions
-int dirX(int dir)
+/**
+* Author: Venrob
+* Version: 1.0
+* Release: 24 May, 2019
+* Purpose: Miscellaneous functions, which I tend to use in my scripts.
+*/
+namespace Venrob
 {
-    switch(dir)
-    {
-        case DIR_RIGHT: case DIR_RIGHTUP: case DIR_RIGHTDOWN:
-            return 1;
-        case DIR_LEFT: case DIR_LEFTUP: case DIR_LEFTDOWN:
-            return -1;
-        default:
-            return 0;
-    }
-}
-
-int dirY(int dir)
-{
-    switch(dir)
-    {
-        case DIR_DOWN: case DIR_LEFTDOWN: case DIR_RIGHTDOWN:
-            return 1;
-        case DIR_UP: case DIR_LEFTUP: case DIR_RIGHTUP:
-            return -1;
-        default:
-            return 0;
-    }
-}
-
-int remX(int dir)
-{
-	switch(dir)
+	//start Misc Functions
+	/**
+	* My version of RunNPCScript, since noone else has one yet.
+	* Takes an enemy ID, and an NPC script number, as well as optional args.
+	* Spawns an enemy of that ID, assigns it the script and args.
+	* Returns an `npc` pointer to the new enemy.
+	*/
+	npc RunNPCScript(int ID, int scriptNum, untyped args)
 	{
-		case DIR_UP: case DIR_LEFTUP: case DIR_RIGHTUP:
-			return DIR_UP;
-		case DIR_DOWN: case DIR_LEFTDOWN: case DIR_RIGHTDOWN:
-			return DIR_DOWN;
-		default:
-			return -1;
+		// Invalid script
+		if(scriptNum < 0 || scriptNum > 511)
+			return Debug->NULL();
+		
+		npc n = Screen->CreateNPC(ID);
+		n->Script = scriptNum;
+		if (args)
+		{
+			for (int q = SizeOfArray(args) - 1; q >= 0; --q)
+				n->InitD[q] = args[q];
+		}
+		return n;
 	}
-}
-
-int remY(int dir)
-{
-	switch(dir)
+	npc RunNPCScript(int ID, int scriptNum)
 	{
-		case DIR_LEFT: case DIR_LEFTUP: case DIR_LEFTDOWN:
-			return DIR_LEFT;
-		case DIR_RIGHT: case DIR_RIGHTUP: case DIR_RIGHTDOWN:
-			return DIR_RIGHT;
-		default:
-			return -1;
+		return RunNPCScript(ID, scriptNum, NULL);
 	}
-}
-
-int R_SpinDir8(int dir)
-{
-	R_SpinDir8(dir, 1);
-}
-
-int R_SpinDir8(int dir, int count)
-{
-	if(count<0)
+	
+	/**
+	* As above, but takes x and y args, and assigns them to the new NPC.
+	*/
+	npc RunNPCScriptAt(int ID, int scriptNum, int x, int y, untyped args)
 	{
-		for(int q = -count; q > 0; --q)
-			switch(dir)
-			{
-				case DIR_UP: return DIR_LEFTUP;
-				case DIR_RIGHTUP: return DIR_UP;
-				case DIR_RIGHT: return DIR_RIGHTUP;
-				case DIR_RIGHTDOWN: return DIR_RIGHT;
-				case DIR_DOWN: return DIR_RIGHTDOWN;
-				case DIR_LEFTDOWN: return DIR_DOWN;
-				case DIR_LEFT: return DIR_LEFTDOWN;
-				case DIR_LEFTUP: return DIR_LEFT;
-				default: return -1;
-			}
+		npc n = RunNPCScript(ID, scriptNum, args);
+		n->X = x;
+		n->Y = y;
+		return n;
 	}
-	else
+	npc RunNPCScriptAt(int ID, int scriptNum, int x, int y)
 	{
-		for(;count > 0; --count)
-			switch(dir)
-			{
-				case DIR_UP: return DIR_RIGHTUP;
-				case DIR_RIGHTUP: return DIR_RIGHT;
-				case DIR_RIGHT: return DIR_RIGHTDOWN;
-				case DIR_RIGHTDOWN: return DIR_DOWN;
-				case DIR_DOWN: return DIR_LEFTDOWN;
-				case DIR_LEFTDOWN: return DIR_LEFT;
-				case DIR_LEFT: return DIR_LEFTUP;
-				case DIR_LEFTUP: return DIR_UP;
-				default: return -1;
-			}
+		return RunNPCScriptAt(ID, scriptNum, x, y, NULL);
 	}
-}
-//end Misc Functions
-//start CanWalkM
-//lweapon
-bool CanWalkM(lweapon weap, mapdata map, int dir, int step)
-{
-	return CanWalkM(weap, map, dir, step, false);
-}
-
-bool CanWalkM(lweapon weap, mapdata map, int dir, int step, bool useHit)
-{
-	if(!weap->isValid())return false;
-	return CanWalkM(weap->X, weap->Y, weap->X + Cond(useHit, weap->HitWidth, weap->TileWidth * 16) - 1, weap->Y + Cond(useHit, weap->HitHeight, weap->TileHeight * 16) - 1, map, dir, step);
-}
-//eweapon
-bool CanWalkM(eweapon weap, mapdata map, int dir, int step)
-{
-	return CanWalkM(weap, map, dir, step, false);
-}
-
-bool CanWalkM(eweapon weap, mapdata map, int dir, int step, bool useHit)
-{
-	if(!weap->isValid())return false;
-	return CanWalkM(weap->X, weap->Y, weap->X + Cond(useHit, weap->HitWidth, weap->TileWidth * 16) - 1, weap->Y + Cond(useHit, weap->HitHeight, weap->TileHeight * 16) - 1, map, dir, step);
-}
-//npc
-bool CanWalkM(npc n, mapdata map, int dir, int step)
-{
-	return CanWalkM(n, map, dir, step, false);
-}
-
-bool CanWalkM(npc n, mapdata map, int dir, int step, bool useHit)
-{
-	if(!n->isValid())return false;
-	return CanWalkM(n->X, n->Y, n->X + Cond(useHit, n->HitWidth, n->TileWidth * 16) - 1, n->Y + Cond(useHit, n->HitHeight, n->TileHeight * 16) - 1, map, dir, step);
-}
-//ffc
-bool CanWalkM(ffc f, mapdata map, int dir, int step)
-{
-	return CanWalkM(f, map, dir, step, false);
-}
-
-bool CanWalkM(ffc f, mapdata map, int dir, int step, bool useEffect)
-{
-	return CanWalkM(f->X, f->Y, f->X + Cond(useEffect, f->EffectWidth, f->TileWidth * 16) - 1, f->Y + Cond(useEffect, f->EffectHeight, f->TileHeight * 16) - 1, map, dir, step);
-}
-//Link
-bool CanWalkM(mapdata map, int dir, int step, bool largeHitbox)
-{
-	return CanWalkM(Link->X, Link->Y + Cond(largeHitbox, 0, 8), Link->X + 15, Link->Y + 15, map, dir, step);
-}
-//Main
-bool CanWalkM(int x, int y, int xx, int yy, mapdata map, int dir, int step)
-{
-	int width = xx - x + 1;
-	int height = yy - y + 1;
-    switch(dir)
+	
+	/**
+	* Returns 1 if the dir is rightward, -1 if leftward, 0 if neither
+	*/
+	int dirX(int dir)
 	{
-		case DIR_UP: return !(y-step<0||map->isSolid(x,y-step)||map->isSolid(x+Floor(width/2),y-step)||map->isSolid(xx,y-step));
-		case DIR_DOWN: return !(yy+step>=176||map->isSolid(x,yy+step)||map->isSolid(x+Floor(width/2),yy+step)||map->isSolid(xx,yy+step));
-		case DIR_LEFT: return !(x-step<0||map->isSolid(x-step,y)||map->isSolid(x-step,y+Floor(height/2))||map->isSolid(x-step,yy));
-		case DIR_RIGHT: return !(xx+step>=256||map->isSolid(xx+step,y)||map->isSolid(xx+step,y+Floor(height/2))||map->isSolid(xx+step,yy));
-		case DIR_LEFTUP: return (CanWalkM(x, y, xx, yy, map, DIR_LEFT, step) && CanWalkM(x, y, xx, yy, map, DIR_UP, step));
-		case DIR_LEFTDOWN: return (CanWalkM(x, y, xx, yy, map, DIR_LEFT, step) && CanWalkM(x, y, xx, yy, map, DIR_DOWN, step));
-		case DIR_RIGHTUP: return (CanWalkM(x, y, xx, yy, map, DIR_RIGHT, step) && CanWalkM(x, y, xx, yy, map, DIR_UP, step));
-		case DIR_RIGHTDOWN: return (CanWalkM(x, y, xx, yy, map, DIR_RIGHT, step) && CanWalkM(x, y, xx, yy, map, DIR_DOWN, step));
+		switch(dir)
+		{
+			case DIR_RIGHT: case DIR_RIGHTUP: case DIR_RIGHTDOWN:
+				return 1;
+			case DIR_LEFT: case DIR_LEFTUP: case DIR_LEFTDOWN:
+				return -1;
+			default:
+				return 0;
+		}
 	}
-	return false; //invalid direction
-}
-//end CanWalkM
 
-mapdata CurMapdata()
-{
-	return Game->LoadMapData(Game->GetCurMap(), Game->GetCurScreen());
-}
+	/**
+	* Returns 1 if the dir is downward, -1 if upward, 0 if neither
+	*/
+	int dirY(int dir)
+	{
+		switch(dir)
+		{
+			case DIR_DOWN: case DIR_LEFTDOWN: case DIR_RIGHTDOWN:
+				return 1;
+			case DIR_UP: case DIR_LEFTUP: case DIR_RIGHTUP:
+				return -1;
+			default:
+				return 0;
+		}
+	}
 
-void MooshDrawTile(int layer, int cx, int cy, int tile, int blockw, int blockh, int cset, int xscale, int yscale, int rx, int ry, int rangle, int flip, bool transparency, int opacity){
-    int w = xscale;
-    if(xscale==-1)
-        w = blockw*16;
-    int h = yscale;
-    if(yscale==-1)
-        h = blockh*16;
-    Screen->DrawTile(layer, cx-w/2, cy-h/2, tile, blockw, blockh, cset, xscale, yscale, rx-w/2, ry-h/2, rangle, flip, transparency, opacity);
+	/**
+	* Removes the horizontal component of a direction
+	*/
+	int remX(int dir)
+	{
+		switch(dir)
+		{
+			case DIR_UP: case DIR_LEFTUP: case DIR_RIGHTUP:
+				return DIR_UP;
+			case DIR_DOWN: case DIR_LEFTDOWN: case DIR_RIGHTDOWN:
+				return DIR_DOWN;
+			default:
+				return -1;
+		}
+	}
+
+	/**
+	* Removes the vertical component of a direction
+	*/
+	int remY(int dir)
+	{
+		switch(dir)
+		{
+			case DIR_LEFT: case DIR_LEFTUP: case DIR_LEFTDOWN:
+				return DIR_LEFT;
+			case DIR_RIGHT: case DIR_RIGHTUP: case DIR_RIGHTDOWN:
+				return DIR_RIGHT;
+			default:
+				return -1;
+		}
+	}
+
+	/**
+	* Spin a dir clockwise 45°
+	*/
+	int SpinDir8(int dir)
+	{
+		SpinDir8(dir, 1);
+	}
+	
+	/**
+	* Spin a dir clockwise 45°, `count` number of times
+	* If count is negative, will spin counterclockwise instead
+	*/
+	int SpinDir8(int dir, int count)
+	{
+		if(count<0)
+		{
+			for(int q = (-count) % 8; q > 0; --q)
+				switch(dir)
+				{
+					case DIR_UP: return DIR_LEFTUP;
+					case DIR_RIGHTUP: return DIR_UP;
+					case DIR_RIGHT: return DIR_RIGHTUP;
+					case DIR_RIGHTDOWN: return DIR_RIGHT;
+					case DIR_DOWN: return DIR_RIGHTDOWN;
+					case DIR_LEFTDOWN: return DIR_DOWN;
+					case DIR_LEFT: return DIR_LEFTDOWN;
+					case DIR_LEFTUP: return DIR_LEFT;
+					default: return -1;
+				}
+		}
+		else
+		{
+			for(count %= 8;count > 0; --count)
+				switch(dir)
+				{
+					case DIR_UP: return DIR_RIGHTUP;
+					case DIR_RIGHTUP: return DIR_RIGHT;
+					case DIR_RIGHT: return DIR_RIGHTDOWN;
+					case DIR_RIGHTDOWN: return DIR_DOWN;
+					case DIR_DOWN: return DIR_LEFTDOWN;
+					case DIR_LEFTDOWN: return DIR_LEFT;
+					case DIR_LEFT: return DIR_LEFTUP;
+					case DIR_LEFTUP: return DIR_UP;
+					default: return -1;
+				}
+		}
+	}
+	//end Misc Functions
+	//start CanWalkM
+	/**
+	* This function (and set of overloads) acts as CanWalk, but uses an arbitrary 
+	*      `mapdata` pointer for solidity, rather than the current screen.
+	* Related: `CurMapdata()`
+	*/
+	
+	//lweapon
+	bool CanWalkM(lweapon weap, mapdata map, int dir, int step)
+	{
+		return CanWalkM(weap, map, dir, step, false);
+	}
+
+	bool CanWalkM(lweapon weap, mapdata map, int dir, int step, bool useHit)
+	{
+		if(!weap->isValid())return false;
+		return CanWalkM(weap->X, weap->Y, weap->X + Cond(useHit, weap->HitWidth, weap->TileWidth * 16) - 1, weap->Y + Cond(useHit, weap->HitHeight, weap->TileHeight * 16) - 1, map, dir, step);
+	}
+	//eweapon
+	bool CanWalkM(eweapon weap, mapdata map, int dir, int step)
+	{
+		return CanWalkM(weap, map, dir, step, false);
+	}
+
+	bool CanWalkM(eweapon weap, mapdata map, int dir, int step, bool useHit)
+	{
+		if(!weap->isValid())return false;
+		return CanWalkM(weap->X, weap->Y, weap->X + Cond(useHit, weap->HitWidth, weap->TileWidth * 16) - 1, weap->Y + Cond(useHit, weap->HitHeight, weap->TileHeight * 16) - 1, map, dir, step);
+	}
+	//npc
+	bool CanWalkM(npc n, mapdata map, int dir, int step)
+	{
+		return CanWalkM(n, map, dir, step, false);
+	}
+
+	bool CanWalkM(npc n, mapdata map, int dir, int step, bool useHit)
+	{
+		if(!n->isValid())return false;
+		return CanWalkM(n->X, n->Y, n->X + Cond(useHit, n->HitWidth, n->TileWidth * 16) - 1, n->Y + Cond(useHit, n->HitHeight, n->TileHeight * 16) - 1, map, dir, step);
+	}
+	//ffc
+	bool CanWalkM(ffc f, mapdata map, int dir, int step)
+	{
+		return CanWalkM(f, map, dir, step, false);
+	}
+
+	bool CanWalkM(ffc f, mapdata map, int dir, int step, bool useEffect)
+	{
+		return CanWalkM(f->X, f->Y, f->X + Cond(useEffect, f->EffectWidth, f->TileWidth * 16) - 1, f->Y + Cond(useEffect, f->EffectHeight, f->TileHeight * 16) - 1, map, dir, step);
+	}
+	//Link
+	bool CanWalkM(mapdata map, int dir, int step, bool largeHitbox)
+	{
+		return CanWalkM(Link->X, Link->Y + Cond(largeHitbox, 0, 8), Link->X + 15, Link->Y + 15, map, dir, step);
+	}
+	//Main
+	bool CanWalkM(int x, int y, int xx, int yy, mapdata map, int dir, int step)
+	{
+		int width = xx - x + 1;
+		int height = yy - y + 1;
+		switch(dir)
+		{
+			case DIR_UP: return !(y-step<0||map->isSolid(x,y-step)||map->isSolid(x+Floor(width/2),y-step)||map->isSolid(xx,y-step));
+			case DIR_DOWN: return !(yy+step>=176||map->isSolid(x,yy+step)||map->isSolid(x+Floor(width/2),yy+step)||map->isSolid(xx,yy+step));
+			case DIR_LEFT: return !(x-step<0||map->isSolid(x-step,y)||map->isSolid(x-step,y+Floor(height/2))||map->isSolid(x-step,yy));
+			case DIR_RIGHT: return !(xx+step>=256||map->isSolid(xx+step,y)||map->isSolid(xx+step,y+Floor(height/2))||map->isSolid(xx+step,yy));
+			case DIR_LEFTUP: return (CanWalkM(x, y, xx, yy, map, DIR_LEFT, step) && CanWalkM(x, y, xx, yy, map, DIR_UP, step));
+			case DIR_LEFTDOWN: return (CanWalkM(x, y, xx, yy, map, DIR_LEFT, step) && CanWalkM(x, y, xx, yy, map, DIR_DOWN, step));
+			case DIR_RIGHTUP: return (CanWalkM(x, y, xx, yy, map, DIR_RIGHT, step) && CanWalkM(x, y, xx, yy, map, DIR_UP, step));
+			case DIR_RIGHTDOWN: return (CanWalkM(x, y, xx, yy, map, DIR_RIGHT, step) && CanWalkM(x, y, xx, yy, map, DIR_DOWN, step));
+		}
+		return false; //invalid direction
+	}
+	//end CanWalkM
+
+	/**
+	* Returns a mapdata pointer to the current screen.
+	*/
+	mapdata CurMapdata()
+	{
+		return Game->LoadMapData(Game->GetCurMap(), Game->GetCurScreen());
+	}
+
+	//As the name of the function implies, this was stolen from Moosh.
+	void MooshDrawTile(int layer, int cx, int cy, int tile, int blockw, int blockh, int cset, int xscale, int yscale, int rx, int ry, int rangle, int flip, bool transparency, int opacity){
+		int w = xscale;
+		if(xscale==-1)
+			w = blockw*16;
+		int h = yscale;
+		if(yscale==-1)
+			h = blockh*16;
+		Screen->DrawTile(layer, cx-w/2, cy-h/2, tile, blockw, blockh, cset, xscale, yscale, rx-w/2, ry-h/2, rangle, flip, transparency, opacity);
+	}
 }
